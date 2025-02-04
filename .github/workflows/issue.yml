@@ -29,8 +29,8 @@ jobs:
           length=$(cat snyk.sarif | jq '.runs[0].results | length')
           echo "RESULTS_LENGTH=$length" >> $GITHUB_ENV  # Store result length
 
-      # Step 4: Create a GitHub Issue if vulnerabilities are found
-      - name: Create GitHub Issue for vulnerabilities
+      # Step 4: Create a GitHub Issue for vulnerabilities or "Bad credentials" error
+      - name: Create GitHub Issue for vulnerabilities or Bad Credentials error
         if: env.RESULTS_LENGTH != '0'  # Only proceed if there are vulnerabilities
         run: |
           # Initialize issue body with a heading
@@ -55,12 +55,23 @@ jobs:
             issue_body+="### Action Required:\nPlease review and address this vulnerability.\n\n"
           done
 
-          # Create a new GitHub issue using the extracted data
-          curl -X POST \
+          # Now, attempt to create an issue via GitHub API and handle "Bad credentials" error
+          response=$(curl -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             -d '{"title":"Snyk Vulnerability Found: '"$vulnerability_severity $vulnerability_title"'","body":"'"$issue_body"'","labels":["vulnerability","bug"]}' \
-            https://api.github.com/repos/${{ github.repository }}/issues
+            https://api.github.com/repos/${{ github.repository }}/issues 2>&1)
+
+          # Check if the response contains "Bad credentials" and handle accordingly
+          if [[ "$response" == *"Bad credentials"* ]]; then
+            error_message="Authentication failed: Bad credentials."
+            issue_body="### Authentication Error:\n$authenticated_message\n\n$response"
+            curl -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d '{"title":"Authentication Failed: Bad credentials","body":"'"$issue_body"'","labels":["bug","authentication"]}' \
+              https://api.github.com/repos/${{ github.repository }}/issues
+          fi
 
       # Step 5: Fail the job if vulnerabilities are found
       - name: Pass_or_Fail_the_job
@@ -71,3 +82,4 @@ jobs:
             else
                echo "Pass"
             fi
+      
