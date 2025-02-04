@@ -1,31 +1,57 @@
 name: Example workflow for Python using Snyk
-on: push
+
+on:
+  push:
+    branches:
+      - main  # Change to your desired branch or remove to run on all pushes
+
 jobs:
   security:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@master
+      # Step 1: Checkout code
+      - uses: actions/checkout@v2  # Updated to use a stable checkout action
+
+      # Step 2: Run Snyk to check for vulnerabilities
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/python@master
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          command: code test 
+          command: test  # Correct command for testing vulnerabilities
           args: --sarif-file-output=snyk.sarif
 
+      # Step 3: Count the number of security issues found by Snyk
       - name: Total security issues
-        run: 
-             length=$(cat snyk.sarif | jq '.runs[0].results | length')
-             echo "RESULTS_LENGTH=$length" >>$GITHUB_ENV
+        run: |
+          length=$(cat snyk.sarif | jq '.runs[0].results | length')
+          echo "RESULTS_LENGTH=$length" >>$GITHUB_ENV
+
+      # Step 4: Create an issue if vulnerabilities are found
+      - name: Create GitHub Issue for vulnerabilities
+        if: env.RESULTS_LENGTH != '0'
+        run: |
+          # Extract the first vulnerability's title and description from the SARIF file
+          vulnerability_title=$(jq -r '.runs[0].results[0].message.text' snyk.sarif)
+          vulnerability_severity=$(jq -r '.runs[0].results[0].level' snyk.sarif)
+          issue_title="Snyk Vulnerability Found: $vulnerability_title"
+          issue_body="Snyk has detected a vulnerability with the severity level of $vulnerability_severity. Please review the following details:\n\n$(cat snyk.sarif)"
+
+          # Use curl to create a GitHub issue via the GitHub API
+          curl -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d '{"title":"'"$issue_title"'","body":"'"$issue_body"'","labels":["vulnerability","bug"]}' \
+            https://api.github.com/repos/${{ github.repository }}/issues
+
+      # Step 5: Fail the job if vulnerabilities are found
       - name: Pass_or_Fail_the_job
         run: |
-            if [ "$RESULTS_LENGTH" !=0 ]; then
-               echo "Job Failed"
-               exit 1
-            else
-               echo "Pass"
-            fi
-       
-
-    
+          if [ "$RESULTS_LENGTH" != "0" ]; then
+            echo "Job Failed"
+            exit 1
+          else
+            echo "Pass"
+          fi
