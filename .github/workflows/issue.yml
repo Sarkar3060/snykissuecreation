@@ -1,6 +1,10 @@
 name: Snyk Security Scan with SARIF Upload
 on: push
 
+permissions:
+  actions: write  # Ensure write permissions
+  security-events: write  # Allow security event write permissions
+
 jobs:
   security:
     runs-on: ubuntu-latest
@@ -15,7 +19,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: code test
-          args: "--sarif-file-output=path/snyk.sarif"  # Updated to correct path
+          args: "--sarif-file-output=path/snyk.sarif"
 
       - name: Check if SARIF file exists and print contents
         run: |
@@ -25,6 +29,6 @@ jobs:
       - name: Upload SARIF report to GitHub
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: path/snyk.sarif  # Updated to correct path
+          sarif_file: path/snyk.sarif  # Correct file path
           token: ${{ secrets.GITHUB_TOKEN }}
           wait-for-processing: true
