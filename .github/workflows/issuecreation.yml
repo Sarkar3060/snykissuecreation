@@ -1,0 +1,38 @@
+name: Snyk Vulnerability Scan and Issue Creation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  snyk-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install Snyk
+        run: npm install -g snyk
+
+      - name: Run Snyk to monitor vulnerabilities
+        run: snyk test --all-projects --json > snyk-results.json
+
+      - name: Check if vulnerabilities exist
+        id: snyk_check
+        run: |
+          if grep -q '"vulnerabilities":' snyk-results.json; then
+            echo "vulnerabilities=true" >> $GITHUB_ENV
+          else
+            echo "vulnerabilities=false" >> $GITHUB_ENV
+          fi
+
+      - name: Create GitHub Issue for vulnerabilities
+        if: env.vulnerabilities == 'true'
+        uses: peter-evans/create-issue-from-file@v3
+        with:
+          title: "Vulnerability Found in Pull Request"
+          body: |
+            Snyk has found vulnerabilities in this pull request. Please review the Snyk report for details.
+          labels: bug, vulnerability
