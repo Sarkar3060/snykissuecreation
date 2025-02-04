@@ -1,19 +1,10 @@
 name: Example workflow for Python using Snyk
-
-on: 
-  push:
-    branches:
-      - main
-
+on: push
 jobs:
   security:
     runs-on: ubuntu-latest
-
     steps:
-      # Checkout repository
       - uses: actions/checkout@master
-
-      # Run Snyk to check for vulnerabilities and generate SARIF file
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/python@master
         continue-on-error: true
@@ -21,20 +12,9 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: code test
-          args: --sarif-file-output=snyk.sarif  # Ensure this is generating snyk.sarif
+          args: "--sarif-file-output=path/to/directory/snyk.sarif"  # Fixed to a single string
 
-      # Check if the SARIF file exists and its content
-      - name: Check if SARIF file exists
+      - name: Check if SARIF file exists and print contents
         run: |
-          ls -la
-          cat snyk.sarif  # Ensure the file exists and view its content
-
-      # Upload SARIF results to CodeQL
-      - name: Upload SARIF results to CodeQL
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: snyk.sarif  # Path to the SARIF file
-          checkout_path: /home/runner/work/snykissuecreation/snykissuecreation
-          token: ${{ secrets.GITHUB_TOKEN }}
-          wait-for-processing: true
-
+          ls -la  # List files to check if snyk.sarif exists
+          cat path/to/directory/snyk.sarif  # Display the contents of the SARIF file
