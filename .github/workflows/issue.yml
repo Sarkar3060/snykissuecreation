@@ -1,85 +1,23 @@
-name: Example workflow for Python using Snyk
+name: Snyk Security Scan
 
 on:
   push:
     branches:
-      - main  # Change to your desired branch or remove to run on all pushes
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  security:
+  snyk:
+    name: Run Snyk Security Scan
     runs-on: ubuntu-latest
-
     steps:
-      # Step 1: Checkout code
-      - uses: actions/checkout@v2  # Checkout the code to scan
-
-      # Step 2: Run Snyk to check for vulnerabilities
-      - name: Run Snyk to check for vulnerabilities
+      - uses: actions/checkout@v2
+      - name: Run Snyk test
         uses: snyk/actions/python@master
-        continue-on-error: true
         env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}  # Using your Snyk API token securely
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          command: code test  # Run Snyk test command to scan the code
-          args: --sarif-file-output=snyk.sarif  # Save results as SARIF
-
-      # Step 3: Count the number of security issues found by Snyk
-      - name: Total security issues
-        run: |
-          length=$(cat snyk.sarif | jq '.runs[0].results | length')
-          echo "RESULTS_LENGTH=$length" >> $GITHUB_ENV  # Store result length
-
-      # Step 4: Create a GitHub Issue for vulnerabilities or "Bad credentials" error
-      - name: Create GitHub Issue for vulnerabilities or Bad Credentials error
-        if: env.RESULTS_LENGTH != '0'  # Only proceed if there are vulnerabilities
-        run: |
-          # Initialize issue body with a heading
-          issue_body="### Vulnerability Details:\n\n"
-
-          # Loop through all vulnerabilities and extract relevant information
-          for i in $(seq 0 $(($RESULTS_LENGTH - 1))); do
-            vulnerability_title=$(jq -r ".runs[0].results[$i].message.text" snyk.sarif)
-            vulnerability_severity=$(jq -r ".runs[0].results[$i].level" snyk.sarif)
-            vulnerability_url=$(jq -r ".runs[0].results[$i].links[0].uri" snyk.sarif)
-            vulnerability_location=$(jq -r ".runs[0].results[$i].locations[0].physicalLocation.artifactLocation.uri" snyk.sarif)
-            
-            # Add details for each vulnerability
-            issue_body+="**Title**: $vulnerability_title\n"
-            issue_body+="**Severity**: $vulnerability_severity\n"
-            issue_body+="**Description**: [More details]($vulnerability_url)\n"
-            issue_body+="**File/Location**: $vulnerability_location\n\n"
-            
-            # Additional sections for remediation, impact, and actions
-            issue_body+="### How to Fix:\n[Refer to Snyk's fix or mitigation guide]\n\n"
-            issue_body+="### Impact:\n[Explain the potential impact of the vulnerability]\n\n"
-            issue_body+="### Action Required:\nPlease review and address this vulnerability.\n\n"
-          done
-
-          # Now, attempt to create an issue via GitHub API and handle "Bad credentials" error
-          response=$(curl -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            -d '{"title":"Snyk Vulnerability Found: '"$vulnerability_severity $vulnerability_title"'","body":"'"$issue_body"'","labels":["vulnerability","bug"]}' \
-            https://api.github.com/repos/${{ github.repository }}/issues 2>&1)
-
-          # Check if the response contains "Bad credentials" and handle accordingly
-          if [[ "$response" == *"Bad credentials"* ]]; then
-            error_message="Authentication failed: Bad credentials."
-            issue_body="### Authentication Error:\n$authenticated_message\n\n$response"
-            curl -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d '{"title":"Authentication Failed: Bad credentials","body":"'"$issue_body"'","labels":["bug","authentication"]}' \
-              https://api.github.com/repos/${{ github.repository }}/issues
-          fi
-
-      # Step 5: Fail the job if vulnerabilities are found
-      - name: Pass_or_Fail_the_job
-        run: |
-            if [ "$RESULTS_LENGTH" !=0 ]; then
-               echo "Job Failed"
-               exit 1
-            else
-               echo "Pass"
-            fi
-      
+          command: code test
+          args: --all-projects
