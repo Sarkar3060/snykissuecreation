@@ -1,31 +1,83 @@
 name: Example workflow for Python using Snyk
-on: push
+
+on:
+  push:
+    branches:
+      - main  # Trigger on push to the main branch
+
 jobs:
   security:
     runs-on: ubuntu-latest
+
     steps:
+      # Checkout the code
       - uses: actions/checkout@master
+
+      # Run Snyk to check for vulnerabilities
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/python@master
-        continue-on-error: true
+       
         env: 
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: code test
           args: --sarif-file-output=snyk.sarif
 
+      # Calculate the length of vulnerabilities found
       - name: Total security issues
-        run: 
-             length=$(cat snyk.sarif | jq '.runs[0].results | length')
-             echo "RESULTS_LENGTH=$length" >>$GITHUB_ENV
+        run: |
+          length=$(cat snyk.sarif | jq '.runs[0].results | length')
+          echo "RESULTS_LENGTH=$length" >>$GITHUB_ENV
+
+      # Pass or fail the job based on vulnerabilities
       - name: Pass_or_Fail_the_job
         run: |
-            if [ "$RESULTS_LENGTH" !=0 ]; then
-               echo "Job Failed"
-               exit 1
-            else
-               echo "Pass"
-            fi
-       
+          if [ "$RESULTS_LENGTH" != "0" ]; then
+            echo "Job Failed"
+            exit 1
+          else
+            echo "Pass"
+          fi
 
-      
+      # Create GitHub issue if vulnerabilities are found
+      - name: Create issue for vulnerabilities
+        if: ${{ env.RESULTS_LENGTH != '0' }}  # Only run if vulnerabilities are found
+        run: |
+          issue_body="### Vulnerability Details:\n\n"
+          
+          # Loop through vulnerabilities and create issue body
+          for i in $(seq 0 $(($RESULTS_LENGTH - 1))); do
+            vulnerability_title=$(jq -r ".runs[0].results[$i].message.text" snyk.sarif)
+            vulnerability_severity=$(jq -r ".runs[0].results[$i].level" snyk.sarif)
+            vulnerability_url=$(jq -r ".runs[0].results[$i].links[0].uri" snyk.sarif)
+            vulnerability_location=$(jq -r ".runs[0].results[$i].locations[0].physicalLocation.artifactLocation.uri" snyk.sarif)
+            
+            # Add details for each vulnerability
+            issue_body+="**Title**: $vulnerability_title\n"
+            issue_body+="**Severity**: $vulnerability_severity\n"
+            issue_body+="**Description**: [More details]($vulnerability_url)\n"
+            issue_body+="**File/Location**: $vulnerability_location\n\n"
+            
+            # Additional sections for remediation, impact, and actions
+            issue_body+="### How to Fix:\n[Refer to Snyk's fix or mitigation guide]\n\n"
+            issue_body+="### Impact:\n[Explain the potential impact of the vulnerability]\n\n"
+            issue_body+="### Action Required:\nPlease review and address this vulnerability.\n\n"
+          done
+          
+          # Attempt to create an issue via GitHub API
+          response=$(curl -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d '{"title":"Snyk Vulnerability Found: '"$vulnerability_severity $vulnerability_title"'","body":"'"$issue_body"'","labels":["vulnerability","bug"]}' \
+            https://api.github.com/repos/${{ github.repository }}/issues 2>&1)
+          
+          # Check if the response contains "Bad credentials" and handle accordingly
+          if [[ "$response" == *"Bad credentials"* ]]; then
+            error_message="Authentication failed: Bad credentials."
+            issue_body="### Authentication Error:\n$error_message\n\n$response"
+            curl -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d '{"title":"Authentication Failed: Bad credentials","body":"'"$issue_body"'","labels":["bug","authentication"]}' \
+              https://api.github.com/repos/${{ github.repository }}/issues
+          fi
