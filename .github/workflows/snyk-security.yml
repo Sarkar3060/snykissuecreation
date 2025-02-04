@@ -24,7 +24,7 @@ jobs:
 
       # Run Snyk Code (SAST) and output to SARIF
       - name: Snyk Code test
-        run: snyk code test --sarif snyk-code.sarif
+        run: snyk auth test --sarif snyk-code.sarif
 
       # Upload the results to GitHub Code Scanning
       - name: Upload result to GitHub Code Scanning
