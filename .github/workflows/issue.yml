@@ -47,11 +47,11 @@ jobs:
             https://api.github.com/repos/${{ github.repository }}/issues
 
       # Step 5: Fail the job if vulnerabilities are found
-      - name: Pass_or_Fail_the_job
+      - name : Pass_or_Fail_the_job
         run: |
-          if [ "$RESULTS_LENGTH" != "0" ]; then
-            echo "Job Failed"
-            exit 1
-          else
-            echo "Pass"
-          fi
+            if [ "$RESULTS_LENGTH" !=0 ]; then
+               echo "Job Failed"
+               exit 1
+            else
+               echo "Pass"
+            fi
