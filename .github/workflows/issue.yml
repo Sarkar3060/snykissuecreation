@@ -3,7 +3,7 @@ name: Example workflow for Python using Snyk
 on:
   push:
     branches:
-      - main  # Change to your desired branch or remove to run on all pushes
+      - main  # Change to your desired branch or remove to run on all pushes 
 
 jobs:
   security:
