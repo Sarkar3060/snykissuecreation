@@ -32,12 +32,12 @@ jobs:
       # Pass or fail the job based on vulnerabilities
       - name: Pass_or_Fail_the_job
         run: |
-          if [ "$RESULTS_LENGTH" != "0" ]; then
-            echo "Job Failed"
-            exit 1
-          else
-            echo "Pass"
-          fi
+            if [ "$RESULTS_LENGTH" !=0 ]; then
+               echo "Job Failed"
+               exit 1
+            else
+               echo "Pass"
+            fi
 
       # Create GitHub issue if vulnerabilities are found
       - name: Create issue for vulnerabilities
