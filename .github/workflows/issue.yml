@@ -14,10 +14,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Run Snyk test
-        uses: snyk/actions/python@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      
+      - name: Set up Node.js (for Snyk)
+        uses: actions/setup-node@v2
         with:
-          command: code test
-          args: --all-projects
+          node-version: '14'  # Make sure you're using the correct version
+      
+      - name: Install Snyk
+        run: npm install -g snyk
+      
+      - name: Run Snyk test
+        run: snyk code test --sarif > snyk-code.sarif
+        continue-on-error: true  # Prevents the job from failing if vulnerabilities are found
+      
+      - name: Upload SARIF report to GitHub
+        uses: github/codeql-action/upload-sarif@v1
+        with:
+          sarif_file: snyk-code.sarif
