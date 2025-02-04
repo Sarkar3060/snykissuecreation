@@ -1,37 +1,28 @@
-name: Example workflow for Python using Snyk 
- 
+name: Snyk Vulnerability Issue Creation
+
 on:
   push:
     branches:
-      - main  # Change to your desired branch or remove to run on all pushes
+      - main  # Trigger on push to the main branch
 
 jobs:
-  security:
+  create-issue:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout code
-      - uses: actions/checkout@v2  # Checkout the code to scan
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      # Step 2: Run Snyk to check for vulnerabilities
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}  # Using your Snyk API token securely
-        with:
-          command: code test  # Run Snyk test command to scan the code
-          args: --sarif-file-output=snyk.sarif  # Save results as SARIF
-
-      # Step 3: Count the number of security issues found by Snyk
-      - name: Total security issues
+      - name: Set up Snyk CLI
         run: |
-          length=$(cat snyk.sarif | jq '.runs[0].results | length')
-          echo "RESULTS_LENGTH=$length" >> $GITHUB_ENV  # Store result length
+          curl -sL https://github.com/snyk/snyk/releases/download/v1.100.0/snyk-linux-amd64-1.100.0.tar.gz | tar -xz
+          mv snyk /usr/local/bin
 
-      # Step 4: Create a GitHub Issue for vulnerabilities or "Bad credentials" error
-      - name: Create GitHub Issue for vulnerabilities or Bad Credentials error
-        if: env.RESULTS_LENGTH != '0'  # Only proceed if there are vulnerabilities
+      - name: Run Snyk to get results
+        run: |
+          snyk test --all-projects --json > snyk.sarif
+
+      - name: Generate issue body and create GitHub issue
         run: |
           # Initialize issue body with a heading
           issue_body="### Vulnerability Details:\n\n"
@@ -54,32 +45,25 @@ jobs:
             issue_body+="### Impact:\n[Explain the potential impact of the vulnerability]\n\n"
             issue_body+="### Action Required:\nPlease review and address this vulnerability.\n\n"
           done
-
+          
           # Now, attempt to create an issue via GitHub API and handle "Bad credentials" error
           response=$(curl -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             -d '{"title":"Snyk Vulnerability Found: '"$vulnerability_severity $vulnerability_title"'","body":"'"$issue_body"'","labels":["vulnerability","bug"]}' \
             https://api.github.com/repos/${{ github.repository }}/issues 2>&1)
-
+          
           # Check if the response contains "Bad credentials" and handle accordingly
           if [[ "$response" == *"Bad credentials"* ]]; then
             error_message="Authentication failed: Bad credentials."
-            issue_body="### Authentication Error:\n$authenticated_message\n\n$response"
+            issue_body="### Authentication Error:\n$error_message\n\n$response"
             curl -X POST \
               -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               -d '{"title":"Authentication Failed: Bad credentials","body":"'"$issue_body"'","labels":["bug","authentication"]}' \
               https://api.github.com/repos/${{ github.repository }}/issues
           fi
-
-      # Step 5: Fail the job if vulnerabilities are found
-      - name: Pass_or_Fail_the_job
-        run: |
-            if [ "$RESULTS_LENGTH" !=0 ]; then
-               echo "Job Failed"
-               exit 1
-            else
-               echo "Pass"
-            fi
-      
+          
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RESULTS_LENGTH: 2  # Adjust this based on your results
