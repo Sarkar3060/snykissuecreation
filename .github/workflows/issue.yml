@@ -66,7 +66,7 @@ jobs:
           
           # Attempt to create an issue via GitHub API
           response=$(curl -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Authorization: token $SNYK_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             -d '{"title":"Snyk Vulnerability Found: '"$vulnerability_severity $vulnerability_title"'","body":"'"$issue_body"'","labels":["vulnerability","bug"]}' \
             https://api.github.com/repos/${{ github.repository }}/issues 2>&1)
@@ -76,7 +76,7 @@ jobs:
             error_message="Authentication failed: Bad credentials."
             issue_body="### Authentication Error:\n$error_message\n\n$response"
             curl -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Authorization: token $SNYK_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               -d '{"title":"Authentication Failed: Bad credentials","body":"'"$issue_body"'","labels":["bug","authentication"]}' \
               https://api.github.com/repos/${{ github.repository }}/issues
