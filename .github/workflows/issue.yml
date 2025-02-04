@@ -65,9 +65,9 @@ jobs:
       # Step 5: Fail the job if vulnerabilities are found
       - name: Pass_or_Fail_the_job
         run: |
-          if [ "$RESULTS_LENGTH" != "0" ]; then
-            echo "Job Failed"
-            exit 1  # Fail the job if vulnerabilities are found
-          else
-            echo "Pass"  # Otherwise, pass the job
-          fi
+            if [ "$RESULTS_LENGTH" !=0 ]; then
+               echo "Job Failed"
+               exit 1
+            else
+               echo "Pass"
+            fi
