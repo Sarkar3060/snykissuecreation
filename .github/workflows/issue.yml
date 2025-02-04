@@ -28,13 +28,4 @@ jobs:
             fi
        
 
-      - name: Send notification on Slack using webhooks
-        uses: slackapi/slack-github-action@v1.24.0
-        if: always() 
-        with:
-          payload: |
-            {
-              "text": "*The Snyk scan result for repo , snykgithubdemoyt, is : ${{ job.status }}* \n*Number of vulnerabilities : ${{ env.RESULTS_LENGTH }}* \n*Details:https://github.com/${{ github.repositry }}/actions/runs/${{ github.run_id }}"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    
