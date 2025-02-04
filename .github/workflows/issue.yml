@@ -20,7 +20,7 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          command: test  # Correct command for testing vulnerabilities
+          command: code test  # Correct command for testing vulnerabilities
           args: --sarif-file-output=snyk.sarif
 
       # Step 3: Count the number of security issues found by Snyk
