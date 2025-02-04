@@ -1,9 +1,13 @@
-name: Snyk Security Scan with SARIF Upload
-on: push
+name: Snyk Security Scan with SARIF Upload and Issue Creation
+on:
+  push:
+    branches:
+      - main
 
 permissions:
-  actions: write  # Ensure write permissions
-  security-events: write  # Allow security event write permissions
+  actions: write
+  issues: write  # Grant permission to create issues
+  security-events: write
 
 jobs:
   security:
@@ -29,6 +33,19 @@ jobs:
       - name: Upload SARIF report to GitHub
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: path/snyk.sarif  # Correct file path
+          sarif_file: path/snyk.sarif
           token: ${{ secrets.GITHUB_TOKEN }}
           wait-for-processing: true
+
+      - name: Create GitHub Issues from SARIF
+        if: success() && steps.upload-sarif.outputs.upload-success == 'true'
+        run: |
+          issues=$(cat path/snyk.sarif | jq -r '.runs[0].results[] | "\(.message.text) - URI: \(.locations[0].physicalLocation.artifactLocation.uri)"')
+          
+          for issue in $issues; do
+            # Create issue for each vulnerability found
+            curl -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -d '{"title": "Security Issue: " + issue, "body": "Description: This issue was detected by SARIF scan. Please review.", "labels": ["security", "vulnerability"]}' \
+              https://api.github.com/repos/${{ github.repository }}/issues
+          done
