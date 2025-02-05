@@ -1,4 +1,4 @@
-name: Snyk Security Scan with SARIF Upload and Issue Creation
+name: Snyk Security Scan with SARIF Upload and Issue Creation 
 on:
   push:
     branches:
