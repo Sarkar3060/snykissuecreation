@@ -18,21 +18,21 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install eslint
+          pip install flake8
 
-      - name: Run ESLint to detect issues
+      - name: Run flake8 to detect issues
         run: |
-          npx eslint . --format=json > eslint-report.json || true
+          flake8 . --format=json > flake8-report.json || true
 
-      - name: Check if ESLint report exists and create issues
+      - name: Check if flake8 report exists and create issues
         run: |
-          if [ -f "eslint-report.json" ]; then
-            # Extract issues from ESLint JSON output
-            issues=$(cat eslint-report.json | jq -r '.[] | .messages[] | "\(.message) - \(.ruleId) - Line: \(.line) Column: \(.column)"')
+          if [ -f "flake8-report.json" ]; then
+            # Extract issues from flake8 JSON output
+            issues=$(cat flake8-report.json | jq -r '.[] | "\(.message) - Line: \(.line) Column: \(.column)"')
             
             # If no issues found, exit early
             if [ -z "$issues" ]; then
-              echo "No issues found by ESLint"
+              echo "No issues found by flake8"
               exit 0
             fi
 
@@ -41,7 +41,7 @@ jobs:
               echo "Creating issue: $issue"
               curl -X POST \
                 -H "Authorization: token ${{ secrets.GH_PAT }}" \  # Use your GitHub Personal Access Token here
-                -d "{\"title\": \"Code Issue: $issue\", \"body\": \"Description: This issue was detected by ESLint. Please review.\", \"labels\": [\"code\", \"linting\"]}" \
+                -d "{\"title\": \"Code Issue: $issue\", \"body\": \"Description: This issue was detected by flake8. Please review.\", \"labels\": [\"code\", \"linting\"]}" \
                 "https://api.github.com/repos/${{ github.repository }}/issues" \
                 -w "\nResponse code: %{http_code}\n"
             done
