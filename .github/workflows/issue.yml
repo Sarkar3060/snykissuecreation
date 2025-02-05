@@ -1,66 +1,51 @@
-name: Simple Code Issue Detection and GitHub Issue Creation
-
+name: Snyk Security Scan with SARIF Upload and Issue Creation 
 on:
   push:
     branches:
       - main
 
 permissions:
+  actions: write
   issues: write  # Grant permission to create issues
+  security-events: write
 
 jobs:
-  code-issues:
+  security:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Install Python
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env: 
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: code test
+          args: "--sarif-file-output=path/snyk.sarif"
+
+      - name: Check if SARIF file exists and print contents
         run: |
-          python -m ensurepip --upgrade
-          python -m pip install --upgrade pip
+          ls -la  # List files to check if snyk.sarif exists
+          cat path/snyk.sarif  # Display the contents of the SARIF file
 
-      - name: Scan Python files for common issues (example:undefined variables)
+      - name: Upload SARIF report to GitHub
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: path/snyk.sarif
+          token: ${{ secrets.GITHUB_TOKEN }}
+          wait-for-processing: true
+
+      - name: Create GitHub Issues from SARIF
+        if: success() && steps.upload-sarif.outputs.upload-success == 'true'
         run: |
-          # Basic script to catch simple issues like undefined variables or unused imports
-          echo "Scanning Python files for issues..."
+          issues=$(cat path/snyk.sarif | jq -r '.runs[0].results[] | "\(.message.text) - URI: \(.locations[0].physicalLocation.artifactLocation.uri)"')
           
-          issues=""
-          
-          # Simple check for undefined variables or unused imports using Python's `py_compile` (will catch syntax errors)
-          for file in $(find . -name "*.py"); do
-            python -m py_compile "$file" 2>&1
-            if [ $? -ne 0 ]; then
-              issues="$issues\nSyntax error in $file"
-            fi
-          done
-
-          # If any issues are found, write them to the issues variable
-          if [ -n "$issues" ]; then
-            echo "$issues"
-          else
-            echo "No issues found"
-          fi
-          
-          # Save issues to a file if any
-          echo "$issues" > issues.txt
-
-      - name: Create GitHub Issues for Detected Problems
-        if: success() && steps.scan.outputs.issues != ''
-        run: |
-          issues=$(cat issues.txt)
-          if [ -z "$issues" ]; then
-            echo "No issues detected."
-            exit 0
-          fi
-
-          # Iterate through the issues and create GitHub issues
-          for issue in $(echo "$issues" | tr '\n' ' '); do
-            echo "Creating issue: $issue"
+          for issue in $issues; do
+            # Create issue for each vulnerability found
             curl -X POST \
-              -H "Authorization: token ${{ secrets.GH_PAT }}" \  # Use your GitHub Personal Access Token here
-              -d "{\"title\": \"Code Issue: $issue\", \"body\": \"Description: This issue was detected by a static analysis tool. Please review.\", \"labels\": [\"code\", \"linting\"]}" \
-              "https://api.github.com/repos/${{ github.repository }}/issues" \
-              -w "\nResponse code: %{http_code}\n"
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -d '{"title": "Security Issue: " + issue, "body": "Description: This issue was detected by SARIF scan. Please review.", "labels": ["security", "vulnerability"]}' \
+              https://api.github.com/repos/${{ github.repository }}/issues
           done
