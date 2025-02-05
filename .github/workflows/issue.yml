@@ -23,7 +23,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: code test
-          args: "--sarif-file-output=path/snyk.sarif"
+          args: "--sarif-file-output=path/snyk.sarif --json-file-output=path/snyk_results.json"
 
       - name: Check if SARIF file exists and print contents
         run: |
@@ -40,8 +40,8 @@ jobs:
       - name: Check for vulnerabilities and create an issue
         id: snyk-issue
         run: |
-          if [ -f snyk_results.json ]; then
-            VULNERABILITIES=$(jq '.vulnerabilities' snyk_results.json)
+          if [ -f path/snyk_results.json ]; then
+            VULNERABILITIES=$(jq '.vulnerabilities' path/snyk_results.json)
             if [ "$VULNERABILITIES" != "[]" ]; then
               echo "Vulnerabilities found! Creating an issue..."
               ISSUE_TITLE="Snyk Alert: Credentials in Code Detected"
@@ -55,4 +55,3 @@ jobs:
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-              
