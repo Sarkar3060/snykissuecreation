@@ -4,49 +4,45 @@ on:
   push:
     branches:
       - main
-
-permissions:
-  actions: write
-  issues: write  # Grant permission to create issues
-  security-events: write
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  security:
+  snyk_security_scan:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v2
 
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python@master
-        continue-on-error: true
-        env: 
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      - name: Set up Snyk CLI
+        uses: snyk/actions/setup@v2
         with:
-          command: code test
-          args: "--sarif-file-output=snyk.sarif"  # Ensure the file is saved in the correct location
+          snyk-token: ${{ secrets.SNYK_TOKEN }}  # Use your Snyk token stored as a GitHub secret
 
-      - name: Check if SARIF file exists and print contents
+      - name: Run Snyk Security Scan
+        id: snyk_scan
         run: |
-          ls -la  # List files to check if snyk.sarif exists
-          cat snyk.sarif  # Display the contents of the SARIF file
+          snyk test --all-projects --json > snyk-report.json
+          snyk monitor --all-projects
 
-      - name: Upload SARIF report to GitHub
-        id: upload-sarif
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload SARIF Results to GitHub
+        if: ${{ always() }}
+        uses: github/codeql-action/upload-sarif@v2
         with:
-          sarif_file: snyk.sarif
-          token: ${{ secrets.GITHUB_TOKEN }}
-          wait-for-processing: true
+          sarif_file: snyk-report.json  # SARIF file output from Snyk
 
-      - name: Create GitHub Issue
+      - name: Check for Vulnerabilities and Create Issue
+        if: ${{ steps.snyk_scan.outcome == 'failure' }}
         run: |
-          # Define the issue title and body
-          issue_title="Security Issue: Sample Issue"
-          issue_body="Description: This is a sample security issue detected in the repository. Please review the code for vulnerabilities."
-
-          # Use curl to create a GitHub issue, making sure JSON is correctly escaped and quoted
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.GH_PAT }}" \
-            -d "{\"title\": \"${issue_title}\", \"body\": \"${issue_body}\", \"labels\": [\"security\", \"vulnerability\"]}" \
-            "https://api.github.com/repos/${{ github.repository }}/issues"
+          echo "Vulnerabilities found, creating an issue"
+          curl -X POST https://api.github.com/repos/${{ github.repository }}/issues \
+            -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d @- <<EOF
+            {
+              "title": "Security vulnerabilities found in the code",
+              "body": "Snyk security scan has found vulnerabilities in the code. Please check the Snyk scan report for details.",
+              "labels": ["security", "bug"]
+            }
+            EOF
