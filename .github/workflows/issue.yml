@@ -1,4 +1,4 @@
-name: Snyk Security Scan with SARIF Upload and Issue Creation
+name: Code Issue Detection and GitHub Issue Creation
 
 on:
   push:
@@ -6,56 +6,43 @@ on:
       - main
 
 permissions:
-  actions: write
   issues: write  # Grant permission to create issues
-  security-events: write
 
 jobs:
-  security:
+  code-issues:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/snyk-action@v2  # Correct action for snyk scan (use the latest available version)
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: test
-          args: "--sarif-file-output=path/snyk.sarif"
-
-      - name: Check if SARIF file exists and print contents
+      - name: Install dependencies
         run: |
-          ls -la  # List files to check if snyk.sarif exists
-          cat path/snyk.sarif  # Display the contents of the SARIF file
+          npm install eslint
 
-      - name: Upload SARIF report to GitHub
-        uses: github/codeql-action/upload-sarif@v2  # Correct action for SARIF file upload
-        with:
-          sarif_file: path/snyk.sarif
-          token: ${{ secrets.GITHUB_TOKEN }}
-          wait-for-processing: true
-
-      - name: Create GitHub Issues from SARIF
-        if: success() && steps.upload-sarif.outputs.upload-success == 'true'
+      - name: Run ESLint to detect issues
         run: |
-          # Extract issues from SARIF file
-          issues=$(cat path/snyk.sarif | jq -r '.runs[0].results[] | "\(.message.text) - URI: \(.locations[0].physicalLocation.artifactLocation.uri)"')
-          
-          # If no issues found, exit early
-          if [ -z "$issues" ]; then
-            echo "No issues found in SARIF report"
-            exit 0
+          npx eslint . --format=json > eslint-report.json || true
+
+      - name: Check if ESLint report exists and create issues
+        run: |
+          if [ -f "eslint-report.json" ]; then
+            # Extract issues from ESLint JSON output
+            issues=$(cat eslint-report.json | jq -r '.[] | .messages[] | "\(.message) - \(.ruleId) - Line: \(.line) Column: \(.column)"')
+            
+            # If no issues found, exit early
+            if [ -z "$issues" ]; then
+              echo "No issues found by ESLint"
+              exit 0
+            fi
+
+            # Iterate through the issues and create GitHub issues
+            for issue in $issues; do
+              echo "Creating issue: $issue"
+              curl -X POST \
+                -H "Authorization: token ${{ secrets.GH_PAT }}" \  # Use your GitHub Personal Access Token here
+                -d "{\"title\": \"Code Issue: $issue\", \"body\": \"Description: This issue was detected by ESLint. Please review.\", \"labels\": [\"code\", \"linting\"]}" \
+                "https://api.github.com/repos/${{ github.repository }}/issues" \
+                -w "\nResponse code: %{http_code}\n"
+            done
           fi
-
-          # Iterate through the issues and create GitHub issues
-          for issue in $issues; do
-            echo "Creating issue: $issue"
-            curl -X POST \
-              -H "Authorization: token ${{ secrets.GH_PAT }}" \  # Use your GitHub PAT here
-              -d "{\"title\": \"Security Issue: $issue\", \"body\": \"Description: This issue was detected by SARIF scan. Please review.\", \"labels\": [\"security\", \"vulnerability\"]}" \
-              "https://api.github.com/repos/${{ github.repository }}/issues" \
-              -w "\nResponse code: %{http_code}\n"
-          done
