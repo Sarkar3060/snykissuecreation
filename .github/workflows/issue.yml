@@ -31,18 +31,30 @@ jobs:
           ls -la path/  # List files to check if snyk_results.json exists
           cat path/snyk_results.json  # Display the contents of the snyk_results.json for debugging
 
-      - name: Extract Code Scanning Alerts and Create Issues
+      - name: Fetch Code Scanning Alerts and Debug Response
         run: |
           # Fetch the latest code scanning alerts from GitHub API
-          CODE_SCANNING_ALERTS=$(curl -H "Authorization: token ${{ secrets.GH_PAT }}" \
+          RESPONSE=$(curl -H "Authorization: token ${{ secrets.GH_PAT }}" \
             "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts")
+          
+          echo "Response from GitHub API:"
+          echo "$RESPONSE"
+          
+          # Check if the response is empty or invalid
+          if [[ -z "$RESPONSE" ]]; then
+            echo "No response from GitHub API"
+            exit 1
+          fi
 
-          # Check if there are any alerts
-          if [ "$(echo $CODE_SCANNING_ALERTS | jq '. | length')" -gt 0 ]; then
+          # Attempt to parse the JSON
+          echo "$RESPONSE" | jq .  # Attempt to validate the JSON response
+
+          # Process the alerts if valid JSON
+          if [ "$(echo "$RESPONSE" | jq '. | length')" -gt 0 ]; then
             echo "Code Scanning Alerts found! Creating issues..."
 
-            # Loop through each alert
-            echo "$CODE_SCANNING_ALERTS" | jq -r '.[] | 
+            # Loop through each alert and process it
+            echo "$RESPONSE" | jq -r '.[] | 
               {
                 rule_name: .rule.name,
                 message: .message.text,
