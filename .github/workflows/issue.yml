@@ -26,21 +26,32 @@ jobs:
           command: code test
           args: "--json-file-output=path/snyk_results.json"
 
-      - name: Check if snyk_results.json exists
+      - name: Check if snyk_results.json exists and display contents
         run: |
-          ls -la path/  # List files to check if snyk_results.json exists
-          cat path/snyk_results.json  # Display the contents of the snyk_results.json
+          ls -la path/  # List files in the folder to verify existence of snyk_results.json
+          cat path/snyk_results.json  # Display the contents of the snyk_results.json for debugging
 
       - name: Parse vulnerabilities and create issues
         id: create-issues
         run: |
           if [ -f path/snyk_results.json ]; then
-            # Extract vulnerabilities from the JSON results using jq
+            # Display the first 10 lines for debugging purposes
+            echo "First 10 lines of snyk_results.json:"
+            head -n 10 path/snyk_results.json
+
+            # Check if the JSON file is not empty or null
+            JSON_CONTENT=$(cat path/snyk_results.json)
+            if [ -z "$JSON_CONTENT" ]; then
+              echo "The snyk_results.json file is empty. Exiting."
+              exit 1
+            fi
+
+            # Now attempt to extract vulnerabilities
             VULNERABILITIES=$(jq -r '.vulnerabilities[] | "\(.package.name) (\(.severity)) - \(.title)"' path/snyk_results.json)
             
             if [ -n "$VULNERABILITIES" ]; then
               echo "Vulnerabilities found! Creating issues..."
-              
+
               # Loop through each vulnerability and create an issue for it
               for vuln in $VULNERABILITIES; do
                 ISSUE_TITLE="Snyk Vulnerability: $vuln"
@@ -56,6 +67,7 @@ jobs:
             fi
           else
             echo "Snyk results file not found."
+            exit 1
           fi
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
