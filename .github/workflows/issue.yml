@@ -13,12 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Snyk CLI
-        uses: snyk/actions/setup@v1  # Updated to v1 (since v2 is not available)
-        with:
-          snyk-token: ${{ secrets.SNYK_TOKEN }}  # Use your Snyk token stored as a GitHub secret
+        run: |
+          curl -sL https://github.com/snyk/snyk/releases/download/v1.1041.0/snyk-linux-amd64 -o /usr/local/bin/snyk
+          chmod +x /usr/local/bin/snyk
+
+      - name: Authenticate Snyk CLI
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
 
       - name: Run Snyk Security Scan
         id: snyk_scan
@@ -28,7 +31,7 @@ jobs:
 
       - name: Upload SARIF Results to GitHub
         if: ${{ always() }}
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: snyk-report.json  # SARIF file output from Snyk
 
