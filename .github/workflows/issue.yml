@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Set up Snyk CLI
-        uses: snyk/actions/setup@v2
+        uses: snyk/actions/setup@v1  # Updated to v1 (since v2 is not available)
         with:
           snyk-token: ${{ secrets.SNYK_TOKEN }}  # Use your Snyk token stored as a GitHub secret
 
