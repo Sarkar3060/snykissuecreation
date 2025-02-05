@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python@v3
+        uses: snyk/actions/python@v1  # Use the correct stable version (v1)
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -32,7 +32,7 @@ jobs:
           cat path/snyk.sarif  # Display the contents of the SARIF file
 
       - name: Upload SARIF report to GitHub
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v2  # Ensure you're using the correct version of the SARIF upload action
         with:
           sarif_file: path/snyk.sarif
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -41,8 +41,8 @@ jobs:
       - name: Create GitHub Issues from SARIF
         if: success() && steps.upload-sarif.outputs.upload-success == 'true'
         run: |
-          # Extract issues from SARIF file using jq
-          issues=$(jq -r '.runs[0].results[] | "Security Issue: \(.message.text)\nURI: \(.locations[0].physicalLocation.artifactLocation.uri)\n" ' path/snyk.sarif)
+          # Extract issues from SARIF file
+          issues=$(cat path/snyk.sarif | jq -r '.runs[0].results[] | "\(.message.text) - URI: \(.locations[0].physicalLocation.artifactLocation.uri)"')
           
           # If no issues found, exit early
           if [ -z "$issues" ]; then
@@ -51,11 +51,11 @@ jobs:
           fi
 
           # Iterate through the issues and create GitHub issues
-          for issue in "$issues"; do
+          for issue in $issues; do
             echo "Creating issue: $issue"
             curl -X POST \
-              -H "Authorization: token ${{ secrets.GH_PAT }}" \
-              -d "{\"title\": \"Security Issue: $(echo $issue | head -n 1)\", \"body\": \"Description: This issue was detected by SARIF scan. Please review.\", \"labels\": [\"security\", \"vulnerability\"]}" \
+              -H "Authorization: token ${{ secrets.GH_PAT }}" \  # Use your GitHub PAT here
+              -d "{\"title\": \"Security Issue: $issue\", \"body\": \"Description: This issue was detected by SARIF scan. Please review.\", \"labels\": [\"security\", \"vulnerability\"]}" \
               "https://api.github.com/repos/${{ github.repository }}/issues" \
               -w "\nResponse code: %{http_code}\n"
           done
