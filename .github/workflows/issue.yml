@@ -1,4 +1,4 @@
-name: Snyk Security Scan and Code Scanning Issue Creation
+name: Code Scanning Alerts to Issues
 
 on:
   push:
@@ -7,54 +7,41 @@ on:
 
 permissions:
   actions: write
-  issues: write  # Allows creation of issues
-  security-events: write
+  issues: write  # Allows creating issues
+  security-events: read
 
 jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the code
+      - name: Checkout the repository
         uses: actions/checkout@v2
 
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: code test
-          args: "--json-file-output=path/snyk_results.json"
-
-      - name: Check if snyk_results.json exists and display contents
-        run: |
-          ls -la path/  # List files to check if snyk_results.json exists
-          cat path/snyk_results.json  # Display the contents of the snyk_results.json for debugging
-
-      - name: Fetch Code Scanning Alerts and Debug Response
+      - name: Fetch code scanning alerts from GitHub API
         run: |
           # Fetch the latest code scanning alerts from GitHub API
           RESPONSE=$(curl -H "Authorization: token ${{ secrets.GH_PAT }}" \
             "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts")
-          
-          echo "Raw Response from GitHub API:"
-          echo "$RESPONSE"
-          
-          # Check if the response is empty
+
+          # Check if the response is empty or contains an error
           if [[ -z "$RESPONSE" ]]; then
             echo "Error: No response received from GitHub API."
             exit 1
           fi
 
-          # Attempt to parse the response and check for valid JSON
+          # Log the raw response for debugging
+          echo "Raw Response from GitHub API:"
+          echo "$RESPONSE"
+
+          # Check if the response contains valid JSON
           echo "$RESPONSE" | jq . || { echo "Error: Invalid JSON response from GitHub API"; exit 1; }
 
-          # Process the alerts if valid JSON
+          # Loop through each alert and create an issue for each one
           ALERT_COUNT=$(echo "$RESPONSE" | jq '. | length')
           if [ "$ALERT_COUNT" -gt 0 ]; then
             echo "Code Scanning Alerts found! Creating issues..."
 
-            # Loop through each alert and process it
+            # Loop through each alert and extract details
             echo "$RESPONSE" | jq -r '.[] | 
               {
                 rule_name: .rule.name,
@@ -65,7 +52,7 @@ jobs:
                 start_line: .locations[0].physicalLocation.region.startLine
               }' | while read alert; do
 
-              # Extract alert details from JSON
+              # Extract values for title and body from the alert
               RULE_NAME=$(echo $alert | jq -r '.rule_name')
               MESSAGE=$(echo $alert | jq -r '.message')
               SEVERITY=$(echo $alert | jq -r '.severity')
@@ -82,7 +69,7 @@ jobs:
               **Start Line**: $START_LINE\n\n
               Tracking issue for:\n- [ ] $ALERT_URL"
               
-              # Create GitHub issues using the formatted title and body
+              # Create GitHub issue with the extracted data
               curl -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
                 -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
                 https://api.github.com/repos/${{ github.repository }}/issues
