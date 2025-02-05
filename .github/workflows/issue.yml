@@ -28,7 +28,7 @@ jobs:
 
       - name: Check if snyk_results.json exists and display contents
         run: |
-          ls -la path/  # List files in the folder to verify existence of snyk_results.json
+          ls -la path/  # List files to check if snyk_results.json exists
           cat path/snyk_results.json  # Display the contents of the snyk_results.json for debugging
 
       - name: Parse vulnerabilities and create issues
@@ -46,8 +46,8 @@ jobs:
               exit 1
             fi
 
-            # Now attempt to extract vulnerabilities
-            VULNERABILITIES=$(jq -r '.vulnerabilities[] | "\(.package.name) (\(.severity)) - \(.title)"' path/snyk_results.json)
+            # Extract vulnerabilities from the correct section in SARIF format
+            VULNERABILITIES=$(jq -r '.runs[].results[] | "\(.ruleId) - \(.message.text)"' path/snyk_results.json)
             
             if [ -n "$VULNERABILITIES" ]; then
               echo "Vulnerabilities found! Creating issues..."
