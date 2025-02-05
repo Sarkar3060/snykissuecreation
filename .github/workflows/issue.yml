@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/snyk-action@v2  # Use the correct version (v2) for snyk action
+        uses: snyk/snyk-action@v2  # Correct action for snyk scan (use the latest available version)
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -32,7 +32,7 @@ jobs:
           cat path/snyk.sarif  # Display the contents of the SARIF file
 
       - name: Upload SARIF report to GitHub
-        uses: github/codeql-action/upload-sarif@v2  # Ensure you're using the correct version of the SARIF upload action
+        uses: github/codeql-action/upload-sarif@v2  # Correct action for SARIF file upload
         with:
           sarif_file: path/snyk.sarif
           token: ${{ secrets.GITHUB_TOKEN }}
