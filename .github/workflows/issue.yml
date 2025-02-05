@@ -43,7 +43,7 @@ jobs:
           # Unset GITHUB_TOKEN to avoid conflicts with GH_PAT
           unset GITHUB_TOKEN
 
-          # Authenticate GitHub CLI with GH_PAT
+          # Set GH_PAT token for authentication
           export GH_TOKEN=${{ secrets.GH_PAT }}
           
           # Check if snyk_results.json exists and process it
@@ -53,7 +53,7 @@ jobs:
               echo "Vulnerabilities found! Creating an issue..."
               ISSUE_TITLE="Snyk Alert: Credentials in Code Detected"
               ISSUE_BODY="Snyk has detected credentials in the code. Please review the following vulnerabilities:\n\n$VULNERABILITIES"
-              gh issue create --title "$ISSUE_TITLE" --body "$ISSUE_BODY" --label "security" --token "$GH_TOKEN"
+              gh issue create --title "$ISSUE_TITLE" --body "$ISSUE_BODY" --label "security"
             else
               echo "No vulnerabilities found."
             fi
