@@ -17,16 +17,35 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      # Step to generate SARIF file (for example, from Snyk or another tool)
+      - name: Run Snyk and generate SARIF file
+        run: |
+          snyk test --all-projects --sarif-file-output=snyk.sarif
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      # Step to confirm SARIF file was generated
+      - name: Confirm SARIF file exists
+        run: |
+          if [ -f "snyk.sarif" ]; then
+            echo "SARIF file found!"
+          else
+            echo "No SARIF file found. Please check your tool configuration."
+            exit 1
+          fi
+
+      # Step to upload SARIF to GitHub Code Scanning
       - name: Upload SARIF report to GitHub
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: path/to/your/sarif-file.sarif
+          sarif_file: snyk.sarif
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Step to create GitHub issues from SARIF
       - name: Create GitHub Issues from SARIF
         run: |
           # Parse SARIF and extract issues
-          issues=$(cat path/to/your/sarif-file.sarif | jq -r '.runs[0].results[] | "\(.message.text) - File: \(.locations[0].physicalLocation.artifactLocation.uri) Line: \(.locations[0].physicalLocation.region.startLine)"')
+          issues=$(cat snyk.sarif | jq -r '.runs[0].results[] | "\(.message.text) - File: \(.locations[0].physicalLocation.artifactLocation.uri) Line: \(.locations[0].physicalLocation.region.startLine)"')
           
           # If no issues found, exit early
           if [ -z "$issues" ]; then
@@ -42,7 +61,7 @@ jobs:
             echo "Creating issue: $title"
 
             curl -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Authorization: token ${{ secrets.GH_PAT }}" \
               -d "{\"title\": \"Security Issue: $title\", \"body\": \"Description: This issue was detected by SARIF scan. Please review. Location: $file_and_line.\", \"labels\": [\"security\", \"vulnerability\"]}" \
               "https://api.github.com/repos/${{ github.repository }}/issues" \
               -w "\nResponse code: %{http_code}\n"
