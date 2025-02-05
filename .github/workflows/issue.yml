@@ -1,82 +1,44 @@
-name: Auto Create Issues from Code Scanning Alerts
+# Check if the response is a valid array of alerts
+if echo "$RESPONSE" | jq -e 'type == "array"' > /dev/null; then
+  ALERT_COUNT=$(echo "$RESPONSE" | jq '. | length')
+  echo "Total Alerts: $ALERT_COUNT"
 
-on:
-  push:
-    branches:
-      - main
+  if [ "$ALERT_COUNT" -gt 0 ]; then
+    echo "Code Scanning Alerts found! Creating issues..."
 
-permissions:
-  issues: write
-  security-events: read
+    echo "$RESPONSE" | jq -r '.[] | 
+      {
+        rule_name: .rule.name,
+        message: .message.text,
+        severity: .severity,
+        alert_url: .html_url,
+        location: .locations[0].physicalLocation.artifactLocation.uri,
+        start_line: .locations[0].physicalLocation.region.startLine
+      }' | while read alert; do
 
-jobs:
-  security:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout the repository
-        uses: actions/checkout@v2
+      RULE_NAME=$(echo $alert | jq -r '.rule_name')
+      MESSAGE=$(echo $alert | jq -r '.message')
+      SEVERITY=$(echo $alert | jq -r '.severity')
+      ALERT_URL=$(echo $alert | jq -r '.alert_url')
+      LOCATION=$(echo $alert | jq -r '.location')
+      START_LINE=$(echo $alert | jq -r '.start_line')
 
-      - name: Fetch code scanning alerts from GitHub API
-        run: |
-          # Fetch code scanning alerts from the GitHub API
-          RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GH_PAT }}" \
-            "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts")
-
-          # Check if the response is empty or invalid
-          if [[ -z "$RESPONSE" ]]; then
-            echo "Error: No response received from GitHub API."
-            exit 1
-          fi
-
-          # Check if the response contains an error message or rate limiting message
-          if echo "$RESPONSE" | jq -e 'has("message")' > /dev/null; then
-            ERROR_MSG=$(echo "$RESPONSE" | jq -r '.message')
-            echo "Error received from GitHub API: $ERROR_MSG"
-            exit 1
-          fi
-
-          # Get the total number of alerts
-          ALERT_COUNT=$(echo "$RESPONSE" | jq '. | length')
-          echo "Total Alerts: $ALERT_COUNT"
-
-          if [ "$ALERT_COUNT" -gt 0 ]; then
-            echo "Code Scanning Alerts found! Creating issues..."
-
-            # Loop through each alert and extract relevant details
-            echo "$RESPONSE" | jq -r '.[] | 
-              {
-                rule_name: .rule.name,
-                message: .message.text,
-                severity: .severity,
-                alert_url: .html_url,
-                location: .locations[0].physicalLocation.artifactLocation.uri,
-                start_line: .locations[0].physicalLocation.region.startLine
-              }' | while read alert; do
-
-              # Extract values for title and body from the alert
-              RULE_NAME=$(echo $alert | jq -r '.rule_name')
-              MESSAGE=$(echo $alert | jq -r '.message')
-              SEVERITY=$(echo $alert | jq -r '.severity')
-              ALERT_URL=$(echo $alert | jq -r '.alert_url')
-              LOCATION=$(echo $alert | jq -r '.location')
-              START_LINE=$(echo $alert | jq -r '.start_line')
-
-              # Format the issue title and body
-              ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
-              ISSUE_BODY="<!-- Warning: The suggested title contains the alert rule name. This can expose security information. -->\n\n
-              **Severity**: $SEVERITY\n
-              **Message**: $MESSAGE\n
-              **Location**: $LOCATION\n
-              **Start Line**: $START_LINE\n\n
-              Tracking issue for:\n- [ ] $ALERT_URL"
-              
-              # Create the issue using GitHub's REST API
-              curl -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
-                -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
-                https://api.github.com/repos/${{ github.repository }}/issues
-            done
-          else
-            echo "No code scanning alerts found."
-          fi
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
+      ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
+      ISSUE_BODY="<!-- Warning: The suggested title contains the alert rule name. This can expose security information. -->\n\n
+      **Severity**: $SEVERITY\n
+      **Message**: $MESSAGE\n
+      **Location**: $LOCATION\n
+      **Start Line**: $START_LINE\n\n
+      Tracking issue for:\n- [ ] $ALERT_URL"
+      
+      curl -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
+        -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
+        https://api.github.com/repos/${{ github.repository }}/issues
+    done
+  else
+    echo "No code scanning alerts found."
+  fi
+else
+  echo "Error: The response is not a valid array of alerts."
+  exit 1
+fi
