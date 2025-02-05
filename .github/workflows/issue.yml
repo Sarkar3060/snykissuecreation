@@ -1,4 +1,4 @@
-name: Snyk Security Scan and Issue Creation from Code Scanning
+name: Snyk Security Scan and Code Scanning Issue Creation
 
 on:
   push:
@@ -42,15 +42,32 @@ jobs:
             echo "Code Scanning Alerts found! Creating issues..."
 
             # Loop through each alert
-            echo "$CODE_SCANNING_ALERTS" | jq -r '.[] | "\(.rule.name): \(.message.text) - URL: \(.html_url)"' | while read alert; do
-              # Extract alert title and URL
-              ALERT_NAME=$(echo $alert | cut -d ':' -f1)
-              ALERT_URL=$(echo $alert | cut -d ' ' -f3)
-              
+            echo "$CODE_SCANNING_ALERTS" | jq -r '.[] | 
+              {
+                rule_name: .rule.name,
+                message: .message.text,
+                severity: .severity,
+                alert_url: .html_url,
+                location: .locations[0].physicalLocation.artifactLocation.uri,
+                start_line: .locations[0].physicalLocation.region.startLine
+              }' | while read alert; do
+
+              # Extract alert details from JSON
+              RULE_NAME=$(echo $alert | jq -r '.rule_name')
+              MESSAGE=$(echo $alert | jq -r '.message')
+              SEVERITY=$(echo $alert | jq -r '.severity')
+              ALERT_URL=$(echo $alert | jq -r '.alert_url')
+              LOCATION=$(echo $alert | jq -r '.location')
+              START_LINE=$(echo $alert | jq -r '.start_line')
+
               # Format the issue title and body
-              ISSUE_TITLE="Fix code scanning alert - $ALERT_NAME"
-              echo "$ALERT_URL"
-              ISSUE_BODY="<!-- Warning: The suggested title contains the alert rule name. This can expose security information. -->\n\nTracking issue for:\n- [ ] $ALERT_URL"
+              ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
+              ISSUE_BODY="<!-- Warning: The suggested title contains the alert rule name. This can expose security information. -->\n\n
+              **Severity**: $SEVERITY\n
+              **Message**: $MESSAGE\n
+              **Location**: $LOCATION\n
+              **Start Line**: $START_LINE\n\n
+              Tracking issue for:\n- [ ] $ALERT_URL"
               
               # Create GitHub issues using the formatted title and body
               curl -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
