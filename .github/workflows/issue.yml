@@ -18,12 +18,12 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python@master
+        uses: snyk/actions/python@v3
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          command: code test
+          command: test
           args: "--sarif-file-output=path/snyk.sarif"
 
       - name: Check if SARIF file exists and print contents
@@ -41,8 +41,8 @@ jobs:
       - name: Create GitHub Issues from SARIF
         if: success() && steps.upload-sarif.outputs.upload-success == 'true'
         run: |
-          # Extract issues from SARIF file
-          issues=$(cat path/snyk.sarif | jq -r '.runs[0].results[] | "\(.message.text) - URI: \(.locations[0].physicalLocation.artifactLocation.uri)"')
+          # Extract issues from SARIF file using jq
+          issues=$(jq -r '.runs[0].results[] | "Security Issue: \(.message.text)\nURI: \(.locations[0].physicalLocation.artifactLocation.uri)\n" ' path/snyk.sarif)
           
           # If no issues found, exit early
           if [ -z "$issues" ]; then
@@ -51,11 +51,11 @@ jobs:
           fi
 
           # Iterate through the issues and create GitHub issues
-          for issue in $issues; do
+          for issue in "$issues"; do
             echo "Creating issue: $issue"
             curl -X POST \
-              -H "Authorization: token ${{ secrets.GH_PAT }}" \  # Use your PAT here
-              -d "{\"title\": \"Security Issue: $issue\", \"body\": \"Description: This issue was detected by SARIF scan. Please review.\", \"labels\": [\"security\", \"vulnerability\"]}" \
+              -H "Authorization: token ${{ secrets.GH_PAT }}" \
+              -d "{\"title\": \"Security Issue: $(echo $issue | head -n 1)\", \"body\": \"Description: This issue was detected by SARIF scan. Please review.\", \"labels\": [\"security\", \"vulnerability\"]}" \
               "https://api.github.com/repos/${{ github.repository }}/issues" \
               -w "\nResponse code: %{http_code}\n"
           done
