@@ -1,4 +1,4 @@
-name: Snyk Security Scan and Issue Creation
+name: Snyk Security Scan and Issue Creation from Code Scanning
 
 on:
   push:
@@ -31,43 +31,33 @@ jobs:
           ls -la path/  # List files to check if snyk_results.json exists
           cat path/snyk_results.json  # Display the contents of the snyk_results.json for debugging
 
-      - name: Parse vulnerabilities and create issues
-        id: create-issues
+      - name: Extract Code Scanning Alerts and Create Issues
         run: |
-          if [ -f path/snyk_results.json ]; then
-            # Display the first 10 lines for debugging purposes
-            echo "First 10 lines of snyk_results.json:"
-            head -n 10 path/snyk_results.json
+          # Fetch the latest code scanning alerts from GitHub API
+          CODE_SCANNING_ALERTS=$(curl -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts")
 
-            # Check if the JSON file is not empty or null
-            JSON_CONTENT=$(cat path/snyk_results.json)
-            if [ -z "$JSON_CONTENT" ]; then
-              echo "The snyk_results.json file is empty. Exiting."
-              exit 1
-            fi
+          # Check if there are any alerts
+          if [ "$(echo $CODE_SCANNING_ALERTS | jq '. | length')" -gt 0 ]; then
+            echo "Code Scanning Alerts found! Creating issues..."
 
-            # Extract vulnerabilities from the correct section in SARIF format
-            VULNERABILITIES=$(jq -r '.runs[].results[] | "\(.ruleId) - \(.message.text)"' path/snyk_results.json)
-            
-            if [ -n "$VULNERABILITIES" ]; then
-              echo "Vulnerabilities found! Creating issues..."
-
-              # Loop through each vulnerability and create an issue for it
-              for vuln in $VULNERABILITIES; do
-                ISSUE_TITLE="Snyk Vulnerability: $vuln"
-                ISSUE_BODY="Snyk has detected the following vulnerability in your code:\n\n$vuln\n\nPlease review and fix the issue."
-
-                # Create GitHub issues for each vulnerability
-                curl -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
-                  -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
-                  https://api.github.com/repos/${{ github.repository }}/issues
-              done
-            else
-              echo "No vulnerabilities found."
-            fi
+            # Loop through each alert
+            echo "$CODE_SCANNING_ALERTS" | jq -r '.[] | "\(.rule.name): \(.message.text) - URL: \(.html_url)"' | while read alert; do
+              # Extract alert title and URL
+              ALERT_NAME=$(echo $alert | cut -d ':' -f1)
+              ALERT_URL=$(echo $alert | cut -d ' ' -f3)
+              
+              # Format the issue title and body
+              ISSUE_TITLE="Fix code scanning alert - $ALERT_NAME"
+              ISSUE_BODY="<!-- Warning: The suggested title contains the alert rule name. This can expose security information. -->\n\nTracking issue for:\n- [ ] $ALERT_URL"
+              
+              # Create GitHub issues using the formatted title and body
+              curl -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
+                -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
+                https://api.github.com/repos/${{ github.repository }}/issues
+            done
           else
-            echo "Snyk results file not found."
-            exit 1
+            echo "No code scanning alerts found."
           fi
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
