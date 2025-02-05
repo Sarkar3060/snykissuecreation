@@ -39,16 +39,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           wait-for-processing: true
 
-      - name: Create GitHub Issues from SARIF
-        if: success() && steps.upload-sarif.outputs.upload-success == 'true'
+      - name: Create GitHub Issue
         run: |
-          issues=$(jq -r '.runs[0].results[] | "\(.message.text) - URI: \(.locations[0].physicalLocation.artifactLocation.uri)"' snyk.sarif)
-          
-          for issue in $issues; do
-            # Create issue for each vulnerability found
-            curl -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "{\"title\": \"Security Issue: $issue\", \"body\": \"Description: This issue was detected by SARIF scan. Please review.\", \"labels\": [\"security\", \"vulnerability\"]}" \
-              https://api.github.com/repos/${{ github.repository }}/issues
-          done
+          # Define the issue title and body
+          issue_title="Security Issue: Sample Issue"
+          issue_body="Description: This is a sample security issue detected in the repository. Please review the code for vulnerabilities."
+
+          # Use curl to create a GitHub issue, making sure JSON is correctly escaped and quoted
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -d "{\"title\": \"${issue_title}\", \"body\": \"${issue_body}\", \"labels\": [\"security\", \"vulnerability\"]}" \
+            "https://api.github.com/repos/${{ github.repository }}/issues"
