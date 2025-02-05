@@ -1,4 +1,4 @@
-name: Code Scanning Alerts to Issues
+name: Snyk Security Scan and Issue Creation from Code Scanning
 
 on:
   push:
@@ -7,69 +7,51 @@ on:
 
 permissions:
   actions: write
-  issues: write  # Allows creating issues
-  security-events: read
+  issues: write  # Allows creation of issues
+  security-events: write
 
 jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the repository
+      - name: Checkout the code
         uses: actions/checkout@v2
 
-      - name: Fetch code scanning alerts from GitHub API
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: code test
+          args: "--json-file-output=path/snyk_results.json"
+
+      - name: Check if snyk_results.json exists and display contents
+        run: |
+          ls -la path/  # List files to check if snyk_results.json exists
+          cat path/snyk_results.json  # Display the contents of the snyk_results.json for debugging
+
+      - name: Extract Code Scanning Alerts and Create Issues
         run: |
           # Fetch the latest code scanning alerts from GitHub API
-          RESPONSE=$(curl -H "Authorization: token ${{ secrets.GH_PAT }}" \
+          CODE_SCANNING_ALERTS=$(curl -H "Authorization: token ${{ secrets.GH_PAT }}" \
             "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts")
 
-          # Check if the response is empty or contains an error
-          if [[ -z "$RESPONSE" ]]; then
-            echo "Error: No response received from GitHub API."
-            exit 1
-          fi
-
-          # Log the raw response for debugging
-          echo "Raw Response from GitHub API:"
-          echo "$RESPONSE"
-
-          # Check if the response contains valid JSON
-          echo "$RESPONSE" | jq . || { echo "Error: Invalid JSON response from GitHub API"; exit 1; }
-
-          # Loop through each alert and create an issue for each one
-          ALERT_COUNT=$(echo "$RESPONSE" | jq '. | length')
-          if [ "$ALERT_COUNT" -gt 0 ]; then
+          # Check if there are any alerts
+          if [ "$(echo $CODE_SCANNING_ALERTS | jq '. | length')" -gt 0 ]; then
             echo "Code Scanning Alerts found! Creating issues..."
 
-            # Loop through each alert and extract details
-            echo "$RESPONSE" | jq -r '.[] | 
-              {
-                rule_name: .rule.name,
-                message: .message.text,
-                severity: .severity,
-                alert_url: .html_url,
-                location: .locations[0].physicalLocation.artifactLocation.uri,
-                start_line: .locations[0].physicalLocation.region.startLine
-              }' | while read alert; do
-
-              # Extract values for title and body from the alert
-              RULE_NAME=$(echo $alert | jq -r '.rule_name')
-              MESSAGE=$(echo $alert | jq -r '.message')
-              SEVERITY=$(echo $alert | jq -r '.severity')
-              ALERT_URL=$(echo $alert | jq -r '.alert_url')
-              LOCATION=$(echo $alert | jq -r '.location')
-              START_LINE=$(echo $alert | jq -r '.start_line')
-
-              # Format the issue title and body
-              ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
-              ISSUE_BODY="<!-- Warning: The suggested title contains the alert rule name. This can expose security information. -->\n\n
-              **Severity**: $SEVERITY\n
-              **Message**: $MESSAGE\n
-              **Location**: $LOCATION\n
-              **Start Line**: $START_LINE\n\n
-              Tracking issue for:\n- [ ] $ALERT_URL"
+            # Loop through each alert
+            echo "$CODE_SCANNING_ALERTS" | jq -r '.[] | "\(.rule.name): \(.message.text) - URL: \(.html_url)"' | while read alert; do
+              # Extract alert title and URL
+              ALERT_NAME=$(echo $alert | cut -d ':' -f1)
+              ALERT_URL=$(echo $alert | cut -d ' ' -f3)
               
-              # Create GitHub issue with the extracted data
+              # Format the issue title and body
+              ISSUE_TITLE="Fix code scanning alert - $ALERT_NAME"
+              ISSUE_BODY="<!-- Warning: The suggested title contains the alert rule name. This can expose security information. -->\n\nTracking issue for:\n- [ ] $ALERT_URL"
+              
+              # Create GitHub issues using the formatted title and body
               curl -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
                 -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
                 https://api.github.com/repos/${{ github.repository }}/issues
