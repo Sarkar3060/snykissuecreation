@@ -21,7 +21,7 @@ jobs:
           python -m ensurepip --upgrade
           python -m pip install --upgrade pip
 
-      - name: Scan Python files for common issues (example: undefined variables)
+      - name: Scan Python files for common issues (example:undefined variables)
         run: |
           # Basic script to catch simple issues like undefined variables or unused imports
           echo "Scanning Python files for issues..."
