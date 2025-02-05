@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python@v1  # Use the correct stable version (v1)
+        uses: snyk/snyk-action@v2  # Use the correct version (v2) for snyk action
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
