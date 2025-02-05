@@ -40,6 +40,10 @@ jobs:
       - name: Check for vulnerabilities and create an issue
         id: snyk-issue
         run: |
+          # Authenticate GitHub CLI with GH_PAT
+          echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
+
+          # Check if snyk_results.json exists and process it
           if [ -f path/snyk_results.json ]; then
             VULNERABILITIES=$(jq '.vulnerabilities' path/snyk_results.json)
             if [ "$VULNERABILITIES" != "[]" ]; then
