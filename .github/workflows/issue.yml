@@ -1,4 +1,4 @@
-name: Snyk Security Scan with SARIF Upload and Issue Creation 
+name: Security Scan and Issue Creation
 
 on:
   push:
@@ -7,55 +7,50 @@ on:
 
 permissions:
   actions: write
-  issues: write  # Grant permission to create issues
+  issues: write  # Grants permission to create issues
   security-events: write
 
 jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout the code
         uses: actions/checkout@v2
 
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/python@master
         continue-on-error: true
-        env: 
+        env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: code test
-          args: "--sarif-file-output=path/snyk.sarif --json-file-output=path/snyk_results.json"
+          args: "--sarif-file-output=path/snyk.sarif"
 
-      - name: Check if SARIF file exists and print contents
+      - name: Check SARIF file and Upload Results
         run: |
-          ls -la  # List files to check if snyk.sarif exists
-          cat path/snyk.sarif  # Display the contents of the SARIF file
+          ls -la
+          cat path/snyk.sarif
 
-      - name: Upload SARIF report to GitHub
+      - name: Upload SARIF Report to GitHub
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: path/snyk.sarif
           token: ${{ secrets.GITHUB_TOKEN }}
           wait-for-processing: true
 
-      - name: Check for vulnerabilities and create an issue
-        id: snyk-issue
+      - name: Parse SARIF and Create Issue if Vulnerabilities Found
+        id: issue-creation
         run: |
-          # Ensure that GITHUB_TOKEN is not used to avoid conflicts with GH_PAT
-          unset GITHUB_TOKEN
-
-          # Check if snyk_results.json exists and process it
-          if [ -f path/snyk_results.json ]; then
-            # Extract vulnerabilities from JSON file using jq
-            VULNERABILITIES=$(jq '.vulnerabilities' path/snyk_results.json)
-
-            if [ "$VULNERABILITIES" != "[]" ]; then
+          if [ -f path/snyk.sarif ]; then
+            # Extract vulnerabilities from the SARIF report
+            VULNERABILITIES=$(jq '.runs[].results[] | select(.ruleId=="snyk")' path/snyk.sarif)
+            
+            if [ -n "$VULNERABILITIES" ]; then
               echo "Vulnerabilities found! Creating an issue..."
+              ISSUE_TITLE="Security Alert: Vulnerabilities Found in Code"
+              ISSUE_BODY="Snyk has detected vulnerabilities in the code. Please review the following:\n\n$VULNERABILITIES"
 
-              ISSUE_TITLE="Snyk Security Alert: Vulnerabilities Detected"
-              ISSUE_BODY="Snyk has detected vulnerabilities in the code. Please review the following details:\n\n$VULNERABILITIES"
-
-              # Create the issue using GitHub API with the provided GH_PAT
+              # Create an issue using GitHub API
               curl -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
                 -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
                 https://api.github.com/repos/${{ github.repository }}/issues
@@ -63,7 +58,7 @@ jobs:
               echo "No vulnerabilities found."
             fi
           else
-            echo "Snyk results file not found."
+            echo "SARIF file not found."
           fi
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
