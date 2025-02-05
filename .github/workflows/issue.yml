@@ -49,6 +49,7 @@ jobs:
               
               # Format the issue title and body
               ISSUE_TITLE="Fix code scanning alert - $ALERT_NAME"
+              echo "$ALERT_URL"
               ISSUE_BODY="<!-- Warning: The suggested title contains the alert rule name. This can expose security information. -->\n\nTracking issue for:\n- [ ] $ALERT_URL"
               
               # Create GitHub issues using the formatted title and body
