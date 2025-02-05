@@ -33,14 +33,14 @@ jobs:
             exit 1
           fi
 
-          # Check for API error message or rate limiting (look for specific error messages in the response)
+          # Check if the response contains an error message or rate limiting message
           if echo "$RESPONSE" | jq -e 'has("message")' > /dev/null; then
             ERROR_MSG=$(echo "$RESPONSE" | jq -r '.message')
             echo "Error received from GitHub API: $ERROR_MSG"
             exit 1
           fi
 
-          # Check if the response contains valid JSON
+          # Check if the response is valid JSON
           echo "$RESPONSE" | jq . > /dev/null || { echo "Error: Invalid JSON response from GitHub API"; exit 1; }
 
           # Get the total number of alerts
