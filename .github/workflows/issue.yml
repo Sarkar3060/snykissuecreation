@@ -1,5 +1,4 @@
-name: Create GitHub Issues from SARIF Report
-
+name: Snyk Security Scan with SARIF Upload and Issue Creation 
 on:
   push:
     branches:
@@ -7,62 +6,46 @@ on:
 
 permissions:
   actions: write
-  issues: write  # Required to create issues
+  issues: write  # Grant permission to create issues
+  security-events: write
 
 jobs:
-  create-issues:
+  security:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # Step to generate SARIF file (for example, from Snyk or another tool)
-      - name: Run Snyk and generate SARIF file
-        run: |
-          snyk test --all-projects --sarif-file-output=snyk.sarif
-        env:
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env: 
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: code test
+          args: "--sarif-file-output=path/snyk.sarif"
 
-      # Step to confirm SARIF file was generated
-      - name: Confirm SARIF file exists
+      - name: Check if SARIF file exists and print contents
         run: |
-          if [ -f "snyk.sarif" ]; then
-            echo "SARIF file found!"
-          else
-            echo "No SARIF file found. Please check your tool configuration."
-            exit 1
-          fi
+          ls -la  # List files to check if snyk.sarif exists
+          cat path/snyk.sarif  # Display the contents of the SARIF file
 
-      # Step to upload SARIF to GitHub Code Scanning
       - name: Upload SARIF report to GitHub
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: snyk.sarif
+          sarif_file: path/snyk.sarif
           token: ${{ secrets.GITHUB_TOKEN }}
+          wait-for-processing: true
 
-      # Step to create GitHub issues from SARIF
       - name: Create GitHub Issues from SARIF
+        if: success() && steps.upload-sarif.outputs.upload-success == 'true'
         run: |
-          # Parse SARIF and extract issues
-          issues=$(cat snyk.sarif | jq -r '.runs[0].results[] | "\(.message.text) - File: \(.locations[0].physicalLocation.artifactLocation.uri) Line: \(.locations[0].physicalLocation.region.startLine)"')
+          issues=$(cat path/snyk.sarif | jq -r '.runs[0].results[] | "\(.message.text) - URI: \(.locations[0].physicalLocation.artifactLocation.uri)"')
           
-          # If no issues found, exit early
-          if [ -z "$issues" ]; then
-            echo "No issues found in SARIF report"
-            exit 0
-          fi
-
-          # Iterate through the issues and create GitHub issues
           for issue in $issues; do
-            title=$(echo "$issue" | cut -d'-' -f1)
-            file_and_line=$(echo "$issue" | cut -d'-' -f2)
-
-            echo "Creating issue: $title"
-
+            # Create issue for each vulnerability found
             curl -X POST \
-              -H "Authorization: token ${{ secrets.GH_PAT }}" \
-              -d "{\"title\": \"Security Issue: $title\", \"body\": \"Description: This issue was detected by SARIF scan. Please review. Location: $file_and_line.\", \"labels\": [\"security\", \"vulnerability\"]}" \
-              "https://api.github.com/repos/${{ github.repository }}/issues" \
-              -w "\nResponse code: %{http_code}\n"
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -d '{"title": "Security Issue: " + issue, "body": "Description: This issue was detected by SARIF scan. Please review.", "labels": ["security", "vulnerability"]}' \
+              https://api.github.com/repos/${{ github.repository }}/issues
           done
