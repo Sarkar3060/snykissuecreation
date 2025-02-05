@@ -37,15 +37,22 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           wait-for-processing: true
 
-      - name: Create GitHub Issues from SARIF
-        if: success() && steps.upload-sarif.outputs.upload-success == 'true'
+      - name: Check for vulnerabilities and create an issue
+        id: snyk-issue
         run: |
-          issues=$(cat path/snyk.sarif | jq -r '.runs[0].results[] | "\(.message.text) - URI: \(.locations[0].physicalLocation.artifactLocation.uri)"')
-          
-          for issue in $issues; do
-            # Create issue for each vulnerability found
-            curl -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -d '{"title": "Security Issue: " + issue, "body": "Description: This issue was detected by SARIF scan. Please review.", "labels": ["security", "vulnerability"]}' \
-              https://api.github.com/repos/${{ github.repository }}/issues
-          done
+          if [ -f snyk_results.json ]; then
+            VULNERABILITIES=$(jq '.vulnerabilities' snyk_results.json)
+            if [ "$VULNERABILITIES" != "[]" ]; then
+              echo "Vulnerabilities found! Creating an issue..."
+              ISSUE_TITLE="Snyk Alert: Credentials in Code Detected"
+              ISSUE_BODY="Snyk has detected credentials in the code. Please review the following vulnerabilities:\n\n$VULNERABILITIES"
+              gh issue create --title "$ISSUE_TITLE" --body "$ISSUE_BODY" --label "security"
+            else
+              echo "No vulnerabilities found."
+            fi
+          else
+            echo "Snyk results file not found."
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+              
