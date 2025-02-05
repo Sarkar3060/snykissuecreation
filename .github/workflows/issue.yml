@@ -1,44 +1,69 @@
-# Check if the response is a valid array of alerts
-if echo "$RESPONSE" | jq -e 'type == "array"' > /dev/null; then
-  ALERT_COUNT=$(echo "$RESPONSE" | jq '. | length')
-  echo "Total Alerts: $ALERT_COUNT"
+name: Snyk Security Scan and Issue Creation
+on:
+  push:
+    branches:
+      - main
 
-  if [ "$ALERT_COUNT" -gt 0 ]; then
-    echo "Code Scanning Alerts found! Creating issues..."
+permissions:
+  actions: write
+  issues: write
+  security-events: write
 
-    echo "$RESPONSE" | jq -r '.[] | 
-      {
-        rule_name: .rule.name,
-        message: .message.text,
-        severity: .severity,
-        alert_url: .html_url,
-        location: .locations[0].physicalLocation.artifactLocation.uri,
-        start_line: .locations[0].physicalLocation.region.startLine
-      }' | while read alert; do
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-      RULE_NAME=$(echo $alert | jq -r '.rule_name')
-      MESSAGE=$(echo $alert | jq -r '.message')
-      SEVERITY=$(echo $alert | jq -r '.severity')
-      ALERT_URL=$(echo $alert | jq -r '.alert_url')
-      LOCATION=$(echo $alert | jq -r '.location')
-      START_LINE=$(echo $alert | jq -r '.start_line')
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: code test
+          args: "--sarif-file-output=path/snyk.sarif"
 
-      ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
-      ISSUE_BODY="<!-- Warning: The suggested title contains the alert rule name. This can expose security information. -->\n\n
-      **Severity**: $SEVERITY\n
-      **Message**: $MESSAGE\n
-      **Location**: $LOCATION\n
-      **Start Line**: $START_LINE\n\n
-      Tracking issue for:\n- [ ] $ALERT_URL"
-      
-      curl -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
-        -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
-        https://api.github.com/repos/${{ github.repository }}/issues
-    done
-  else
-    echo "No code scanning alerts found."
-  fi
-else
-  echo "Error: The response is not a valid array of alerts."
-  exit 1
-fi
+      - name: Upload SARIF to GitHub Security Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: path/snyk.sarif
+          token: ${{ secrets.GITHUB_TOKEN }}
+          wait-for-processing: true
+
+      - name: Create issues for code scanning alerts
+        if: success() # Only runs if previous steps succeed
+        run: |
+          # List all code scanning alerts from GitHub's built-in functionality
+          ALERTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts")
+
+          # Check if we have code scanning alerts
+          if [ -n "$ALERTS" ]; then
+            echo "Code scanning alerts found. Creating issues..."
+
+            # Loop through each alert to create an issue for it
+            echo "$ALERTS" | jq -r '.[] | 
+              {
+                rule_name: .rule.name,
+                message: .message.text,
+                severity: .severity,
+                alert_url: .html_url
+              }' | while read alert; do
+
+              RULE_NAME=$(echo $alert | jq -r '.rule_name')
+              MESSAGE=$(echo $alert | jq -r '.message')
+              SEVERITY=$(echo $alert | jq -r '.severity')
+              ALERT_URL=$(echo $alert | jq -r '.alert_url')
+
+              ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
+              ISSUE_BODY="**Severity**: $SEVERITY\n**Message**: $MESSAGE\n\nTracking issue for:\n- [ ] $ALERT_URL"
+
+              curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
+                https://api.github.com/repos/${{ github.repository }}/issues
+            done
+          else
+            echo "No code scanning alerts found."
+          fi
