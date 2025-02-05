@@ -1,4 +1,4 @@
-name: Security Scan and Issue Creation
+name: Snyk Security Scan and Issue Creation
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 permissions:
   actions: write
-  issues: write  # Grants permission to create issues
+  issues: write  # Allows creation of issues
   security-events: write
 
 jobs:
@@ -24,41 +24,38 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: code test
-          args: "--sarif-file-output=path/snyk.sarif"
+          args: "--json-file-output=path/snyk_results.json"
 
-      - name: Check SARIF file and Upload Results
+      - name: Check if snyk_results.json exists
         run: |
-          ls -la
-          cat path/snyk.sarif
+          ls -la path/  # List files to check if snyk_results.json exists
+          cat path/snyk_results.json  # Display the contents of the snyk_results.json
 
-      - name: Upload SARIF Report to GitHub
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: path/snyk.sarif
-          token: ${{ secrets.GITHUB_TOKEN }}
-          wait-for-processing: true
-
-      - name: Parse SARIF and Create Issue if Vulnerabilities Found
-        id: issue-creation
+      - name: Parse vulnerabilities and create issues
+        id: create-issues
         run: |
-          if [ -f path/snyk.sarif ]; then
-            # Extract vulnerabilities from the SARIF report
-            VULNERABILITIES=$(jq '.runs[].results[] | select(.ruleId=="snyk")' path/snyk.sarif)
+          if [ -f path/snyk_results.json ]; then
+            # Extract vulnerabilities from the JSON results using jq
+            VULNERABILITIES=$(jq -r '.vulnerabilities[] | "\(.package.name) (\(.severity)) - \(.title)"' path/snyk_results.json)
             
             if [ -n "$VULNERABILITIES" ]; then
-              echo "Vulnerabilities found! Creating an issue..."
-              ISSUE_TITLE="Security Alert: Vulnerabilities Found in Code"
-              ISSUE_BODY="Snyk has detected vulnerabilities in the code. Please review the following:\n\n$VULNERABILITIES"
+              echo "Vulnerabilities found! Creating issues..."
+              
+              # Loop through each vulnerability and create an issue for it
+              for vuln in $VULNERABILITIES; do
+                ISSUE_TITLE="Snyk Vulnerability: $vuln"
+                ISSUE_BODY="Snyk has detected the following vulnerability in your code:\n\n$vuln\n\nPlease review and fix the issue."
 
-              # Create an issue using GitHub API
-              curl -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
-                -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
-                https://api.github.com/repos/${{ github.repository }}/issues
+                # Create GitHub issues for each vulnerability
+                curl -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
+                  -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
+                  https://api.github.com/repos/${{ github.repository }}/issues
+              done
             else
               echo "No vulnerabilities found."
             fi
           else
-            echo "SARIF file not found."
+            echo "Snyk results file not found."
           fi
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
