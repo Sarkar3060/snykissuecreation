@@ -20,21 +20,28 @@ jobs:
       - name: Fetch code scanning alerts from GitHub API
         run: |
           # Fetch the latest code scanning alerts from GitHub API
-          RESPONSE=$(curl -H "Authorization: token ${{ secrets.GH_PAT }}" \
+          RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GH_PAT }}" \
             "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts")
 
-          # Check if the response is empty or contains an error
+          # Check if the response is empty
           if [[ -z "$RESPONSE" ]]; then
             echo "Error: No response received from GitHub API."
             exit 1
           fi
 
-          # Log the raw response for debugging
-          echo "Raw Response from GitHub API:"
-          echo "$RESPONSE"
+          # Check for API error message or rate limiting (look for specific error messages in the response)
+          if echo "$RESPONSE" | jq -e 'has("message")' > /dev/null; then
+            ERROR_MSG=$(echo "$RESPONSE" | jq -r '.message')
+            echo "Error received from GitHub API: $ERROR_MSG"
+            exit 1
+          fi
 
           # Check if the response contains valid JSON
           echo "$RESPONSE" | jq . || { echo "Error: Invalid JSON response from GitHub API"; exit 1; }
+
+          # Log the raw response for debugging purposes
+          echo "Raw Response from GitHub API:"
+          echo "$RESPONSE"
 
           # Loop through each alert and create an issue for each one
           ALERT_COUNT=$(echo "$RESPONSE" | jq '. | length')
