@@ -43,8 +43,8 @@ jobs:
           # Unset GITHUB_TOKEN to avoid conflicts with GH_PAT
           unset GITHUB_TOKEN
 
-          # Set GH_PAT token for authentication
-          export GH_TOKEN=${{ secrets.GH_PAT }}
+          # Authenticate GitHub CLI with GH_PAT
+          echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
           
           # Check if snyk_results.json exists and process it
           if [ -f path/snyk_results.json ]; then
