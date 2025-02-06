@@ -1,5 +1,4 @@
-
-name: Snyk Security Scan and Issue Creation   
+name: Snyk Security Scan and Issue Creation  
 on:
   push:
     branches:
@@ -48,10 +47,14 @@ jobs:
 
             # Loop through each alert
             echo "$ALERTS" | jq -c '.[]' | while read -r alert; do
-              RULE_NAME=$(echo "$alert" | jq -r '.rule.id')
-              MESSAGE=$(echo "$alert" | jq -r '.message.text')
-              SEVERITY=$(echo "$alert" | jq -r '.severity')
-              ALERT_URL=$(echo "$alert" | jq -r '.html_url')
+              RULE_NAME=$(echo "$alert" | jq -r '.rule.name')  # Get the rule name instead of id
+              MESSAGE=$(echo "$alert" | jq -r '.message.text')  # Get the alert message text
+              SEVERITY=$(echo "$alert" | jq -r '.severity')    # Get the severity (high, medium, low)
+              ALERT_URL=$(echo "$alert" | jq -r '.html_url')    # Get the URL to the alert on GitHub
+
+              # Check if the severity or message is null (if so, default to 'Unknown')
+              SEVERITY=${SEVERITY:-"Unknown"}  # Default to "Unknown" if severity is null or empty
+              MESSAGE=${MESSAGE:-"No message provided"}  # Default if message is empty or null
 
               ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
               ISSUE_BODY="**Severity**: $SEVERITY\n**Message**: $MESSAGE\n\nTracking issue for:\n- [ ] $ALERT_URL"
