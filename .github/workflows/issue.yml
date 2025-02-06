@@ -1,4 +1,5 @@
-name: Snyk Security Scan and Issue Creation 
+
+name: Snyk Security Scan and Issue Creation   
 on:
   push:
     branches:
@@ -39,35 +40,26 @@ jobs:
           ALERTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts")
 
-          # Check if the response is empty or not
-          if [[ -z "$ALERTS" ]]; then
-            echo "Error: No response or no alerts found from GitHub API."
-            exit 1
-          fi
+          # Check if the response contains alerts
+          ALERT_COUNT=$(echo "$ALERTS" | jq 'length')
 
-          # Count the number of alerts
-          TOTAL_ALERTS=$(echo "$ALERTS" | grep -o '"rule":' | wc -l)
-
-          if [ "$TOTAL_ALERTS" -gt 0 ]; then
+          if [ "$ALERT_COUNT" -gt 0 ]; then
             echo "Code scanning alerts found. Creating issues..."
 
-            # Loop through the alerts and create issues
-            echo "$ALERTS" | while read -r line; do
-              # Extract relevant fields from the raw JSON data
-              if [[ "$line" =~ '"rule":' ]]; then
-                RULE_NAME=$(echo "$line" | sed -n 's/.*"name": "\(.*\)",/\1/p')
-                MESSAGE=$(echo "$line" | sed -n 's/.*"message": { "text": "\(.*\)" }/\1/p')
-                SEVERITY=$(echo "$line" | sed -n 's/.*"severity": "\(.*\)"/\1/p')
-                ALERT_URL=$(echo "$line" | sed -n 's/.*"html_url": "\(.*\)"/\1/p')
+            # Loop through each alert
+            echo "$ALERTS" | jq -c '.[]' | while read -r alert; do
+              RULE_NAME=$(echo "$alert" | jq -r '.rule.id')
+              MESSAGE=$(echo "$alert" | jq -r '.message.text')
+              SEVERITY=$(echo "$alert" | jq -r '.severity')
+              ALERT_URL=$(echo "$alert" | jq -r '.html_url')
 
-                ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
-                ISSUE_BODY="**Severity**: $SEVERITY\n**Message**: $MESSAGE\n\nTracking issue for:\n- [ ] $ALERT_URL"
+              ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
+              ISSUE_BODY="**Severity**: $SEVERITY\n**Message**: $MESSAGE\n\nTracking issue for:\n- [ ] $ALERT_URL"
 
-                # Create an issue using GitHub's API
-                curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                  -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
-                  https://api.github.com/repos/${{ github.repository }}/issues
-              fi
+              # Create an issue using GitHub's API
+              curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
+                https://api.github.com/repos/${{ github.repository }}/issues
             done
           else
             echo "No code scanning alerts found."
