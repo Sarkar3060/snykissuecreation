@@ -56,7 +56,7 @@ jobs:
               ALERT_URL=$(echo "$alert" | jq -r '.html_url')    # Get the URL to the alert on GitHub
 
               ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
-              ISSUE_BODY="A potential vulnerability has been identified in your code.:Tracking issue for\n- [ ] $ALERT_URL":\n- [ ] $ALERT_URL"
+              ISSUE_BODY="Tracking issue for:\n- [ ] $ALERT_URL"
 
               # Create an issue using GitHub's API
               curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
