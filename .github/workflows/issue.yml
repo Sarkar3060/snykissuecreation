@@ -1,4 +1,4 @@
-name: Snyk Security Scan and Issue Creation
+name: Snyk Security Scan and Issue Creation 
 on:
   push:
     branches:
