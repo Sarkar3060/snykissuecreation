@@ -56,77 +56,8 @@ jobs:
               ALERT_URL=$(echo "$alert" | jq -r '.html_url')    # Get the URL to the alert on GitHub
 
               ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
-              ISSUE_BODY="name: Snyk Security Scan and Issue Creation  
-on:
-  push:
-    branches:
-      - main
-
-permissions:
-  actions: write
-  issues: write
-  security-events: write
-
-jobs:
-  security:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: code test
-          args: "--sarif-file-output=path/snyk.sarif"
-
-      - name: Upload SARIF to GitHub Security Code Scanning
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: path/snyk.sarif
-          token: ${{ secrets.GITHUB_TOKEN }}
-          wait-for-processing: true
-
-      - name: Create issues for code scanning alerts
-        if: success() # Only runs if previous steps succeed
-        run: |
-          # Fetch the code scanning alerts from GitHub Security
-          ALERTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts")
-          
-          # Print the raw JSON response for debugging purposes
-          echo "Fetched code scanning alerts:"
-          echo "$ALERTS" | jq .
-
-          # Check if the response contains alerts
-          ALERT_COUNT=$(echo "$ALERTS" | jq 'length')
-
-          if [ "$ALERT_COUNT" -gt 0 ]; then
-            echo "Code scanning alerts found. Creating issues..."
-
-            # Loop through each alert
-            echo "$ALERTS" | jq -c '.[]' | while read -r alert; do
-              # Extract rule name and URL
-              RULE_NAME=$(echo "$alert" | jq -r '.rule.name')  # Get the rule name
-              ALERT_URL=$(echo "$alert" | jq -r '.html_url')    # Get the URL to the alert on GitHub
-
-              ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
-              ISSUE_BODY="### 🚨 Code Scanning Alert  
-                          A potential vulnerability has been identified in your code.:
-                          Tracking issue for\n- [ ] $ALERT_URL"
-
-              # Create an issue using GitHub's API
-              curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                -d "{\"title\":\"$ISSUE_TITLE\", \"body\":\"$ISSUE_BODY\", \"labels\":[\"security\"]}" \
-                https://api.github.com/repos/${{ github.repository }}/issues
-            done
-          else
-            echo "No code scanning alerts found."
-          fi
-:\n- [ ] $ALERT_URL"
+              ISSUE_BODY="### 🚨 Code Scanning Alert A potential vulnerability has been identified in your code.:
+              Tracking issue for\n- [ ] $ALERT_URL":\n- [ ] $ALERT_URL"
 
               # Create an issue using GitHub's API
               curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
