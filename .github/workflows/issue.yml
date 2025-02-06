@@ -1,4 +1,4 @@
-name: Snyk Security Scan and Issue Creation  
+name: Snyk Security Scan and Issue Creation   
 on:
   push:
     branches:
@@ -38,10 +38,6 @@ jobs:
           # Fetch the code scanning alerts from GitHub Security
           ALERTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts")
-          
-          # Print the raw JSON response for debugging purposes
-          echo "Fetched code scanning alerts:"
-          echo "$ALERTS" | jq .
 
           # Check if the response contains alerts
           ALERT_COUNT=$(echo "$ALERTS" | jq 'length')
@@ -51,12 +47,13 @@ jobs:
 
             # Loop through each alert
             echo "$ALERTS" | jq -c '.[]' | while read -r alert; do
-              # Extract rule name and URL
-              RULE_NAME=$(echo "$alert" | jq -r '.rule.name')  # Get the rule name
-              ALERT_URL=$(echo "$alert" | jq -r '.html_url')    # Get the URL to the alert on GitHub
+              RULE_NAME=$(echo "$alert" | jq -r '.rule.id')
+              MESSAGE=$(echo "$alert" | jq -r '.message.text')
+              SEVERITY=$(echo "$alert" | jq -r '.severity')
+              ALERT_URL=$(echo "$alert" | jq -r '.html_url')
 
               ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
-              ISSUE_BODY="Tracking issue for:\n- [ ] $ALERT_URL"
+              ISSUE_BODY="**Severity**: $SEVERITY\n**Message**: $MESSAGE\n\nTracking issue for:\n- [ ] $ALERT_URL"
 
               # Create an issue using GitHub's API
               curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
