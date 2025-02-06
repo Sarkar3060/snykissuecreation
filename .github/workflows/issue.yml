@@ -39,9 +39,9 @@ jobs:
           ALERTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts")
           
-          # Print the full alert response for debugging purposes
+          # Print the raw JSON response for debugging purposes
           echo "Fetched code scanning alerts:"
-          echo "$ALERTS"
+          echo "$ALERTS" | jq .
 
           # Check if the response contains alerts
           ALERT_COUNT=$(echo "$ALERTS" | jq 'length')
@@ -51,6 +51,9 @@ jobs:
 
             # Loop through each alert
             echo "$ALERTS" | jq -c '.[]' | while read -r alert; do
+              # Print the raw alert data for each one
+              echo "Alert data: $alert"
+              
               # Extract rule name, message, severity, and URL
               RULE_NAME=$(echo "$alert" | jq -r '.rule.name')  # Get the rule name
               MESSAGE=$(echo "$alert" | jq -r '.message.text')  # Get the alert message text
