@@ -55,8 +55,32 @@ jobs:
               RULE_NAME=$(echo "$alert" | jq -r '.rule.name')  # Get the rule name
               ALERT_URL=$(echo "$alert" | jq -r '.html_url')    # Get the URL to the alert on GitHub
 
+              # Construct the issue body with more interactivity
+              ISSUE_BODY="
+### 🚨 Code Scanning Alert - $RULE_NAME
+
+A potential vulnerability has been identified in your code.
+
+#### Details:
+- **Alert URL**: [$ALERT_URL]($ALERT_URL)
+- **Rule Name**: $RULE_NAME
+
+#### Suggested Action:
+- Review the [alert details on GitHub](https://github.com/${{ github.repository }}/security/code-scanning/alerts) for more information.
+- Fix the issue by addressing the identified vulnerability.
+
+#### Action Items:
+- [ ] Investigate the code at the provided URL.
+- [ ] Apply the necessary fix or mitigation.
+- [ ] Re-run security scans to verify the fix.
+
+#### Additional Resources:
+- [Snyk documentation](https://snyk.io/docs/) for more details on resolving vulnerabilities.
+
+Please ensure the vulnerability is resolved at the earliest. Thank you for maintaining the security of the project!
+"
+
               ISSUE_TITLE="Fix code scanning alert - $RULE_NAME"
-              ISSUE_BODY="Tracking issue for:\n- [ ] $ALERT_URL"
 
               # Create an issue using GitHub's API
               curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
