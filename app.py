@@ -3,7 +3,6 @@ import subprocess
 import hashlib
 import logging
 import re
-import random
 
 command = input("Enter a shell command to execute: ")
 subprocess.run(command, shell=True)
@@ -32,23 +31,3 @@ query = "SELECT * FROM users WHERE username = '" + input("Enter username: ") + "
 print(f"Executing query: {query}")
 
 random.seed(0)
-
-username = input("Enter your username: ")
-if username == 'admin':
-    print("Welcome, admin!")
-
-with open("/tmp/secrets.txt", 'w') as secret_file:
-    secret_file.write("SuperSecretData")
-
-weak_hash = hashlib.sha1(password.encode()).hexdigest()
-
-attempts = 0
-while attempts < 10:
-    password_input = input("Enter your password: ")
-    if password_input == password:
-        print("Access granted")
-        break
-    attempts += 1
-    print("Incorrect password")
-
-os.chmod('vulnerable_file.txt', 0o777)
