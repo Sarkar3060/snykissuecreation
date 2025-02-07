@@ -1,4 +1,4 @@
-name: Snyk Security Scan and Issue Creation    
+name: Snyk Security Scan and Issue Creation
 on:
   push:
     branches:
@@ -35,10 +35,10 @@ jobs:
       - name: Create issues for code scanning alerts
         if: success() # Only runs if previous steps succeed
         run: |
-          # Fetch the code scanning alerts from GitHub Security
+          # Fetch the open code scanning alerts from GitHub Security
           ALERTS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts")
-          
+            "https://api.github.com/repos/${{ github.repository }}/code-scanning/alerts?state=open")
+
           # Print the raw JSON response for debugging purposes
           echo "Fetched code scanning alerts:"
           echo "$ALERTS" | jq .
